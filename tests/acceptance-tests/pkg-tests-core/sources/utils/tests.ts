@@ -839,6 +839,11 @@ export const setWebLoginMock = async (
   }
 };
 
+// Node writes header values as latin1; this sends the UTF-8 bytes a real registry would.
+const encodeWebLoginNotice = (notice: string | Array<string>) => Array.isArray(notice)
+  ? notice.map(value => Buffer.from(value, `utf8`).toString(`latin1`))
+  : Buffer.from(notice, `utf8`).toString(`latin1`);
+
 export function sortJson<T>(data: Iterable<T>): Array<T> {
   return miscUtils.sortMap(data, request => {
     return JSON.stringify(request);
@@ -1372,7 +1377,14 @@ export const startPackageServer = ({type}: {type: keyof typeof packageServerUrls
         throw new Error(`Assertion failed: Invalid request type`);
 
       if (webLoginMock.initFails) {
-        processError(response, 404, `Web login isn't supported by this registry`);
+        const message = `Web login isn't supported by this registry`;
+
+        response.writeHead(404, {
+          ...webLoginMock.notice !== null && {
+            [`npm-notice`]: encodeWebLoginNotice(webLoginMock.notice),
+          },
+        });
+        response.end(message);
         return;
       }
 
@@ -1387,10 +1399,7 @@ export const startPackageServer = ({type}: {type: keyof typeof packageServerUrls
       response.writeHead(200, {
         [`Content-Type`]: `application/json`,
         ...webLoginMock.notice !== null && {
-          // Node writes header values as latin1; this sends the UTF-8 bytes a real registry would.
-          [`npm-notice`]: Array.isArray(webLoginMock.notice)
-            ? webLoginMock.notice.map(notice => Buffer.from(notice, `utf8`).toString(`latin1`))
-            : Buffer.from(webLoginMock.notice, `utf8`).toString(`latin1`),
+          [`npm-notice`]: encodeWebLoginNotice(webLoginMock.notice),
         },
       });
       response.end(data);

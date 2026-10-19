@@ -400,6 +400,9 @@ fn sanitize_notice(notice: &str) -> String {
     let mut chars
         = notice.chars().peekable();
 
+    let mut pending_break
+        = false;
+
     while let Some(ch) = chars.next() {
         match ch {
             // OSC: a string terminated by BEL or ST
@@ -426,15 +429,19 @@ fn sanitize_notice(notice: &str) -> String {
             },
 
             // Line breaks and tabs become a single space so that words do not run together
-            '\n' | '\r' | '\t' | '\u{2028}' | '\u{2029}' => {
-                if !output.ends_with(' ') {
-                    output.push(' ');
-                }
+            '\n' | '\r' | '\t' | '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}' => {
+                pending_break = true;
             },
 
             ch if ch.is_control() || is_formatting_char(ch) => {},
 
             ch => {
+                // The break only adds a space when no space is next to it already
+                if pending_break && ch != ' ' && !output.is_empty() && !output.ends_with(' ') {
+                    output.push(' ');
+                }
+
+                pending_break = false;
                 output.push(ch);
             },
         }
@@ -515,6 +522,43 @@ mod tests {
         assert_eq!(sanitize_notice("Line one\r\n\r\nLine two\u{2028}Line three"), "Line one Line two Line three");
         assert_eq!(sanitize_notice("Code:\t123"), "Code: 123");
         assert_eq!(sanitize_notice("\n Code \t\n"), "Code");
+    }
+
+    #[test]
+    fn does_not_add_a_space_next_to_a_space() {
+        assert_eq!(sanitize_notice("a\n b"), "a b");
+        // Literal spaces stay as sent; the line break adds none
+        assert_eq!(sanitize_notice("a \n b"), "a  b");
+        assert_eq!(sanitize_notice("Line one\n  Line two"), "Line one  Line two");
+        assert_eq!(sanitize_notice("a\u{2028}\u{200b}\n b"), "a b");
+        assert_eq!(sanitize_notice("a \nb"), "a b");
+    }
+
+    #[test]
+    fn treats_next_line_vertical_tab_and_form_feed_as_breaks() {
+        assert_eq!(sanitize_notice("a\u{85}b"), "a b");
+        assert_eq!(sanitize_notice("a\u{b}b"), "a b");
+        assert_eq!(sanitize_notice("a\u{c}b"), "a b");
+    }
+
+    #[test]
+    fn is_idempotent() {
+        for input in [
+            "a\n b",
+            "a \n b",
+            "Line one\n  Line two",
+            "a\u{2028}\u{200b}\n b",
+            "a\u{85}b",
+            "a\u{b}b",
+            "a\u{c}b",
+            "Line one\nLine two",
+            "Code:\t123",
+            "\n Code \t\n",
+        ] {
+            let once = sanitize_notice(input);
+
+            assert_eq!(sanitize_notice(&once), once, "input: {input:?}");
+        }
     }
 
     #[test]
