@@ -246,6 +246,40 @@ describe(`Commands`, () => {
     );
 
     test(
+      `it should fall back to the classic login without printing a notice when web login init fails`,
+      makeTemporaryEnv({}, async ({path, run, source}) => {
+        const rcPath = ppath.join(path, PortablePath.parent, SPEC_RC_FILENAME);
+        await xfs.writeFilePromise(rcPath, ``);
+
+        let code;
+        let stdout;
+        let stderr;
+
+        try {
+          await setWebLoginMock({initFails: true, notice: `Verification code: 123456`}, async () => {
+            ({code, stdout, stderr} = await run(`npm`, `login`, `--web-login`, {
+              env: {
+                YARN_INJECT_NPM_USER: validLogins.fooUser.username,
+                YARN_INJECT_NPM_PASSWORD: validLogins.fooUser.password,
+                YARN_RC_FILENAME: SPEC_RC_FILENAME,
+              },
+            }));
+          });
+        } catch (error) {
+          ({code, stdout, stderr} = error);
+        }
+
+        expect(stdout).not.toContain(`Verification code`);
+
+        const finalRcFileContent = await xfs.readFilePromise(rcPath, `utf8`);
+        const cleanFileContent = cleanupFileContent(finalRcFileContent);
+
+        expect(cleanFileContent).toMatchSnapshot();
+        expect({code, stderr, report: getReportLines(stdout)}).toMatchSnapshot();
+      }),
+    );
+
+    test(
       `it should throw an error when credentials are incorrect`,
       makeTemporaryEnv({}, {
         networkConcurrency: 1,

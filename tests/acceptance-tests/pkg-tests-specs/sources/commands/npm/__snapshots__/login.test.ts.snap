@@ -1,5 +1,26 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`Commands npm login it should fall back to the classic login without printing a notice when web login init fails 1`] = `
+"{
+  "npmRegistries": {
+    "http://yarn.test.registry": {
+      "npmAuthToken": "9d33b95c-ac4d-5a16-a2d6-ae920e9da2f5"
+    }
+  }
+}"
+`;
+
+exports[`Commands npm login it should fall back to the classic login without printing a notice when web login init fails 2`] = `
+{
+  "code": 0,
+  "report": [
+    "➤ · Logging in to http://registry.example.org",
+    "➤ · Successfully logged in",
+  ],
+  "stderr": "",
+}
+`;
+
 exports[`Commands npm login it should login a user with OTP setup 1`] = `
 "{
   "npmRegistries": {

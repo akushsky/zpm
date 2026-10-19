@@ -425,6 +425,13 @@ fn sanitize_notice(notice: &str) -> String {
                 chars.next();
             },
 
+            // Line breaks and tabs become a single space so that words do not run together
+            '\n' | '\r' | '\t' | '\u{2028}' | '\u{2029}' => {
+                if !output.ends_with(' ') {
+                    output.push(' ');
+                }
+            },
+
             ch if ch.is_control() || is_formatting_char(ch) => {},
 
             ch => {
@@ -466,7 +473,7 @@ fn is_formatting_char(ch: char) -> bool {
         | '\u{70f}'
         | '\u{180e}'
         | '\u{200b}'..='\u{200f}'
-        | '\u{2028}'..='\u{202e}'
+        | '\u{202a}'..='\u{202e}'
         | '\u{2060}'..='\u{2064}'
         | '\u{2066}'..='\u{206f}'
         | '\u{feff}'
@@ -499,11 +506,19 @@ mod tests {
 
     #[test]
     fn strips_control_and_formatting_characters() {
-        assert_eq!(sanitize_notice("Code:\t\u{202e}123\u{200b}456\u{85}\r\n"), "Code:123456");
+        assert_eq!(sanitize_notice("Code:\t\u{202e}123\u{200b}456\u{85}\r\n"), "Code: 123456");
+    }
+
+    #[test]
+    fn turns_line_breaks_into_single_spaces() {
+        assert_eq!(sanitize_notice("Line one\nLine two"), "Line one Line two");
+        assert_eq!(sanitize_notice("Line one\r\n\r\nLine two\u{2028}Line three"), "Line one Line two Line three");
+        assert_eq!(sanitize_notice("Code:\t123"), "Code: 123");
+        assert_eq!(sanitize_notice("\n Code \t\n"), "Code");
     }
 
     #[test]
     fn empty_after_stripping() {
-        assert_eq!(sanitize_notice("\u{1b}[31m\u{200b} \t"), "");
+        assert_eq!(sanitize_notice("\u{1b}[31m\u{200b} \t\n"), "");
     }
 }
